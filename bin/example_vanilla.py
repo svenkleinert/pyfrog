@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import pyfrog
 import pyfrog.gui
 """
-Example file showing the retrieval of an synthetic frog trace.
+Example file showing the retrieval of an synthetic frog trace using the priciple component generalized projection algorithm.
 
 """
 def main():
@@ -37,8 +37,7 @@ def main():
     ret_spectrum = pyfrog.retrieval.rana_spectrum( trace )
 
     # retrieve the complex electric field
-    #E = pyfrog.retrieve_vanilla( trace, spectrum=ret_spectrum, phase = np.zeros(Nf), max_iter=1000, g_limit=0 )
-    E = pyfrog.retrieve_pcgpa( trace , spectrum=ret_spectrum, phase=np.zeros(Nf), g_limit=1e-6, max_iter=100000 )
+    E = pyfrog.retrieve_vanilla( trace, spectrum=ret_spectrum, phase = np.zeros(Nf), max_iter=1000, g_limit=0 )
 
     # plotting
     pyfrog.gui.simple_frog_result_plot( f, f_c, tau, E, trace, plotstyle='wavelength' )

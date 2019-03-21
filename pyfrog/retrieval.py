@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.interpolate import interp2d
+from scipy.interpolate import interp2d, interp1d
 import time
 import warnings
 import pyfrog.frog
@@ -284,3 +284,71 @@ def rana_spectrum( trace, padding=None, threshold=1e-3 ):
     spectrum = np.concatenate( ( spectrum[:int(Nf/2)], spectrum[-int(Nf/2):] ) )
     #TODO Why it doesn't require squaring here?
     return spectrum / np.amax( spectrum )
+
+
+
+def rana_phase( trace, l=2,
+                    g_limit=1e-10,
+                    max_iter=500,
+                    max_time=10,
+                    stagnation_count = 100,
+                    show_every=None,
+                    spectrum=None, phase=None,
+                    spectrum_gate=None, phase_gate=None,
+                    nonlinearity = 'shg' ):
+    """
+    rana_phase( trace, l=2, kwargs ) retrieves the complex electric field using a multi-grid approach as presented in "100% reliable algorithm for second-harmonic-generation frequency-resolved optical gating," Opt. Express  27, 2112-2124 (2019). This algorithm runs the PCGP algorithm first on a smaller grid size to get a good initial guess for the computational more expensive large grid iterations. Therefore, this procedure is expected to take less time for retrieval of large FROG traces. 
+
+        All kwargs are passed to every instance of the PCGPA.
+
+        arguments:
+            trace : FROG trace.
+            l : default 2, number of intermediate steps. 2 means that the retrievel first runs on a N/4xN/4 and a N/2xN/2 before the full trace is used.
+            g_limit : default 1e-5, retrieval is stopped if the error is smaller than g_limit.
+            max_iter : default 1e3, maximum number of iterations allowed.
+            max_time : default 10, time in seconds allowed.
+            stagnation_count : default 100, allow the algorithm to continue for 'stagnation_count' iterations without improvement before it is stopped.
+            show_every : default 1e30, shows the FROG error every 'show_every' iterations.
+            spectrum : vector containing the power spectral density (PSD) of the pulse.
+            phase : vector containing the spectral phase of the pulse.
+            spectrum_gate (optional) : vector containing the PSD of the gate pulse.
+            phase_gate (optional) : vector containing the spectral phase of the gate pulse.
+            nonlinearity : name of the nonlinearity. Default is 'shg'. Other nonlinearities are currently not available
+
+        returns:
+            E : complex electric field of the pulse in spectral domain.
+                retrieved spectrum is therefore abs(E)**2
+                retrieved phase is np.angle(E)
+    """
+    Nf = trace.shape[1] 
+    if spectrum is None:
+        spectrum = rana_spectrum( trace )
+    if phase is None:
+        phase = np.random.rand( Nf ) * 2 * np.pi
+    E_f = np.sqrt( abs(spectrum) ) * np.exp( -1j * phase )
+    E_t = np.fft.ifft( E_f )
+
+    trace_fun = interp2d( np.arange( Nf ), np.arange( Nf ), np.fft.fftshift(trace,axes=0) )
+    initial_spectrum_fun = interp1d( np.arange(Nf), np.fft.fftshift( spectrum ))
+    f_old = np.arange( Nf )
+    while l >= 0:
+        f_new = np.arange( int( Nf / 2**(l) ) ) * 2**(l/2)
+        f_new += np.mean( np.arange(Nf) ) - np.mean( f_new )
+        _trace = np.fft.fftshift( trace_fun( f_new, f_new ), axes=0 )
+
+        _spectrum_fun = interp1d( f_old, np.fft.fftshift( abs( E_f )**2 ), fill_value=0, bounds_error=False )
+        _phase_fun = interp1d( f_old, np.unwrap( np.fft.fftshift( np.angle( E_f ) ) ), fill_value=0, bounds_error=False )
+        _spectrum = np.fft.fftshift( _spectrum_fun( f_new ) )
+        _phase = np.fft.fftshift( _phase_fun( f_new ) )
+        E_f = pcgpa( _trace, spectrum=_spectrum, phase=_phase, g_limit=g_limit, max_iter=max_iter, max_time=max_time,
+                    stagnation_count = stagnation_count,
+                    show_every=show_every, nonlinearity = 'shg' )
+        ret_trace = pyfrog.frog.generate_trace( abs(E_f), np.angle(E_f) )
+        ret_trace_initial_spectrum = pyfrog.frog.generate_trace( np.fft.fftshift( initial_spectrum_fun( f_new ) ), np.angle( E_f ), nonlinearity=nonlinearity )
+        ret_trace = pyfrog.frog.generate_trace( abs(E_f)**2, np.angle( E_f ), nonlinearity=nonlinearity )
+
+        if pyfrog.frog.g_error( _trace, ret_trace ) > pyfrog.frog.g_error( _trace, ret_trace_initial_spectrum):
+            E_f = np.sqrt( np.fft.fftshift( initial_spectrum_fun( f_new ) ) ) * np.exp( 1j * np.angle( E_f ) )
+        f_old = f_new
+        l -= 1
+    return E_f
