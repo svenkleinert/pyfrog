@@ -35,9 +35,9 @@ def main():
 
     # retrieve spectrum as an initial guess
     ret_spectrum = pyfrog.retrieval.rana_spectrum( trace )
-
+    
     # retrieve the complex electric field
-    E = pyfrog.retrieval.epie( trace , spectrum=ret_spectrum, phase=np.zeros(Nf), g_limit=1e-6, max_iter=100, stagnation_count=100 )
+    E = pyfrog.retrieval.epie( trace , spectrum=spectrum, phase=np.zeros(Nf), g_limit=1e-6, max_iter=50, stagnation_count=100, measured_spectrum=True )
 
     # plotting
     pyfrog.gui.simple_frog_result_plot( f, f_c, tau, E, trace, plotstyle='wavelength' )

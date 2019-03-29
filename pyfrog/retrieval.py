@@ -359,6 +359,7 @@ def epie( trace,
                    show_every=None,
                    spectrum=None, phase=None,
                    spectrum_gate=None, phase_gate=None,
+                   measured_spectrum=False,
                    nonlinearity = 'shg' ):
     """
         epie( trace, gamma, *kwargs ) retrieves the complex electric field of a pulse from a FROG trace using the extended ptychographical iterative engine (ePIE). The whole procedure is desribed in 'Pavel Sidorenko, Oren Lahav, Zohar Avnat, and Oren Cohen, "Ptychographic reconstruction algorithm for frequency-resolved optical gating: super-resolution and supreme robustness," Optica 3, 1320-1330 (2016)'.
@@ -374,6 +375,7 @@ def epie( trace,
             phase : vector containing the spectral phase of the pulse.
             spectrum_gate (optional) : vector containing the PSD of the gate pulse.
             phase_gate (optional) : vector containing the spectral phase of the gate pulse.
+            measured_spectrum (optional) : replace the power spectral density with 'spectrum' in every iteration.
             nonlinearity : name of the nonlinearity. Default is 'shg'. Other nonlinearities are currently not available
 
         returns:
@@ -437,7 +439,14 @@ def epie( trace,
             
             E_t = E_t + alpha * ( np.conjugate( E_shifted ) / np.amax( abs( E_t )**2 ) * (psi_t_prime - psi_t)
                     + np.roll( np.conjugate( E_t ) / np.amax( abs( E_t )**2 ) * (psi_t_prime-psi_t), -to_roll ) )
-
+        if measured_spectrum:
+            E_f = np.fft.fft( E_t )
+            # mute the warning created by devision of abs(O_f)
+            old_err_settings = np.seterr( invalid='ignore' )
+            E_f = E_f / abs( E_f ) * np.sqrt( spectrum )
+            np.seterr( invalid=old_err_settings['invalid'] )
+            E_t = np.fft.ifft( E_f )
+            
             #E_t = E_t + alpha * np.roll( np.conjugate( E_t ), to_roll ) /np.max( abs(E_t) )**2 * ( psi_t_prime - psi_t )
             
 
